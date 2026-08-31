@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "handoff-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "Minimal, project-scoped TODO / Handoff MCP server (stdio) with a loopback viewer."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -27,7 +27,7 @@ dev = ["pytest>=7"]
 handoff-mcp = "handoff_mcp.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/"
+Homepage = "https://github.com/m053m716/Handoff_MCP"
 
 [tool.hatch.build.targets.wheel]
 packages = ["handoff_mcp"]

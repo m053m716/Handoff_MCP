@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import struct
+from pathlib import Path
 
 import pytest
 
 from handoff_mcp.project import resolve_project
+from handoff_mcp.gui import PAGE
 from handoff_mcp.server import HandoffServer
 from handoff_mcp.storage import Store
 from handoff_mcp.tools import ToolError, call_tool
@@ -114,3 +117,15 @@ def test_tool_error_is_reported_not_raised(db):
         }
     )
     assert call["result"]["isError"] is True
+
+
+def test_favicon_assets_are_valid_and_linked():
+    asset_dir = Path(__file__).parents[1] / "handoff_mcp" / "assets"
+    png = (asset_dir / "favicon.png").read_bytes()
+    ico = (asset_dir / "favicon.ico").read_bytes()
+
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert struct.unpack(">II", png[16:24]) == (512, 512)
+    assert struct.unpack("<HHH", ico[:6]) == (0, 1, 7)
+    assert 'href="/favicon.png"' in PAGE
+    assert 'href="/favicon.ico"' in PAGE

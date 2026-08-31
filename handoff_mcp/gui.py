@@ -19,6 +19,7 @@ import json
 import os
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 from .project import Project, resolve_project
@@ -30,6 +31,8 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Handoff / TODO viewer</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
   :root { color-scheme: light dark; --bg:#faf9f7; --fg:#1c1c1c; --muted:#666;
           --card:#fff; --line:#e3e0da; --accent:#2f6f4f; --chip:#eef1ef; }
@@ -119,6 +122,11 @@ async function copy(text){
 async function post(url, body){ await fetch(url,{method:'POST',
   headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); load(); }
 
+// Records for the currently rendered page, keyed by seq. The card markup carries
+// only a numeric data-seq, so no user text is ever injected into HTML attributes.
+const HANDOFFS = new Map();
+const TODOS = new Map();
+
 function handoffText(h){
   let out = h.id + ': ' + h.summary + '\\n';
   if(h.next_steps) out += '\\nNext steps:\\n' + h.next_steps + '\\n';
@@ -142,8 +150,8 @@ function renderHandoff(h){
     ${h.context ? `<div class="body"><b>Context:</b> ${esc(h.context)}</div>`:''}
     ${h.references ? `<div class="body"><b>Refs:</b> ${esc(h.references)}</div>`:''}
     <div class="actions">
-      <button onclick='copy(handoffText(${JSON.stringify(h)}))'>Copy</button>
-      <button onclick='post("/api/handoff/resolve",{seq:${h.seq}})'>Resolve</button>
+      <button data-act="copy-handoff" data-seq="${h.seq}">Copy</button>
+      <button data-act="resolve-handoff" data-seq="${h.seq}">Resolve</button>
     </div></div>`;
 }
 function renderTodo(t){
@@ -155,13 +163,16 @@ function renderTodo(t){
     ${t.detail ? `<div class="body">${esc(t.detail)}</div>`:''}
     ${tags ? `<div style="margin-top:6px">${tags}</div>`:''}
     <div class="actions">
-      <button onclick='copy(todoText(${JSON.stringify(t)}))'>Copy</button>
-      <button onclick='post("/api/todo/done",{seq:${t.seq}})'>Done</button>
+      <button data-act="copy-todo" data-seq="${t.seq}">Copy</button>
+      <button data-act="done-todo" data-seq="${t.seq}">Done</button>
     </div></div>`;
 }
 
 async function load(){
   const r = await fetch('/api/data'); const d = await r.json();
+  HANDOFFS.clear(); TODOS.clear();
+  d.handoffs.forEach(h => HANDOFFS.set(h.seq, h));
+  d.todos.forEach(t => TODOS.set(t.seq, t));
   document.getElementById('proj').textContent =
     d.project.project_label + '  (' + d.project.project_key + ')  —  ' + d.project.project_root;
   document.getElementById('handoffs').innerHTML =
@@ -169,11 +180,27 @@ async function load(){
   document.getElementById('todos').innerHTML =
     d.todos.length ? d.todos.map(renderTodo).join('') : '<div class="empty">None open.</div>';
 }
+
+// Single delegated handler for all card buttons — no inline handlers, so no
+// user-supplied text is ever parsed as JavaScript.
+document.addEventListener('click', ev => {
+  const btn = ev.target.closest('button[data-act]');
+  if(!btn) return;
+  const seq = Number(btn.dataset.seq);
+  switch(btn.dataset.act){
+    case 'copy-handoff': { const h = HANDOFFS.get(seq); if(h) copy(handoffText(h)); break; }
+    case 'resolve-handoff': post('/api/handoff/resolve', {seq}); break;
+    case 'copy-todo': { const t = TODOS.get(seq); if(t) copy(todoText(t)); break; }
+    case 'done-todo': post('/api/todo/done', {seq}); break;
+  }
+});
 load();
 </script>
 </body>
 </html>
 """
+
+_ASSET_DIR = Path(__file__).with_name("assets")
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -205,6 +232,15 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (http.server API)
         if self.path in ("/", "/index.html"):
             self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
+        elif self.path in ("/favicon.png", "/favicon.ico"):
+            filename = self.path.removeprefix("/")
+            content_type = "image/png" if filename.endswith(".png") else "image/x-icon"
+            try:
+                body = (_ASSET_DIR / filename).read_bytes()
+            except OSError:
+                self._json({"error": "not found"}, code=404)
+                return
+            self._send(200, body, content_type)
         elif self.path == "/api/data":
             self._json(
                 {

@@ -92,8 +92,30 @@ PAGE = """<!doctype html>
 const esc = s => (s||"").replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg;
   t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1400); }
-async function copy(text){ try{ await navigator.clipboard.writeText(text);
-  toast('Copied'); }catch(e){ toast('Copy failed'); } }
+function execCopy(text){
+  // Fallback for contexts without the async Clipboard API (e.g. the VS Code
+  // Simple Browser webview, where navigator.clipboard is unavailable).
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.top = '-1000px';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch(e) { ok = false; }
+  document.body.removeChild(ta);
+  return ok;
+}
+async function copy(text){
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); toast('Copied'); return; }
+    catch(e) { /* fall through to legacy path */ }
+  }
+  toast(execCopy(text) ? 'Copied' : 'Copy failed');
+}
 async function post(url, body){ await fetch(url,{method:'POST',
   headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); load(); }
 

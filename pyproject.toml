@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Minimal, project-scoped TODO / Handoff MCP server (stdio) with a loopback viewer."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "Max Murphy", email = "max.murphy11@gmail.com" }]
 keywords = ["mcp", "todo", "handoff", "agents", "context"]
 classifiers = [

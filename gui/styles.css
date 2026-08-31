@@ -1,0 +1,6 @@
+/* Public compatibility entrypoint. Keep this URL stable for /dashboard and bookmarks. */
+@import url("styles/01-base.css");
+@import url("styles/02-operational.css");
+@import url("styles/03-analytics.css");
+@import url("styles/04-documentation.css");
+@import url("styles/05-responsive.css");

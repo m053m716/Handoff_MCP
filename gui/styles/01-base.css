@@ -1,0 +1,225 @@
+/* Dashboard foundation: design tokens, document defaults, shell, and HUD. */
+
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef2f6;
+  --text: #17202a;
+  --muted: #64717f;
+  --line: #d9e0e7;
+  --green: #11845b;
+  --amber: #a96800;
+  --red: #b3261e;
+  --blue: #2457a6;
+  --ink: #24303d;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Classes that set display (e.g. .docs-drift's grid) must not override the
+   hidden attribute, or empty containers render as visible styled strips. */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Arial, sans-serif;
+  line-height: 1.4;
+}
+
+header {
+  background: var(--ink);
+  color: #ffffff;
+  border-bottom: 4px solid #38a169;
+}
+
+.topbar {
+  max-width: 1280px;
+  margin: 0 auto;
+  min-height: 72px;
+  padding: 14px 20px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.subtitle {
+  margin-top: 3px;
+  color: #c9d4df;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 18px 20px 36px;
+  display: grid;
+  gap: 16px;
+}
+
+main > * {
+  min-width: 0;
+}
+
+.toolbar,
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text);
+}
+
+button {
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  transition: transform 80ms ease, box-shadow 80ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+button:hover {
+  border-color: #aeb8c2;
+}
+
+button:not(:disabled):not(.link-button):not(.hud-jump):active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(15, 23, 42, 0), inset 0 2px 4px rgba(15, 23, 42, 0.16);
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+button.primary {
+  background: var(--blue);
+  color: #ffffff;
+  border-color: var(--blue);
+}
+
+button.danger {
+  background: #fff5f5;
+  color: var(--red);
+  border-color: #efb3ad;
+}
+
+button.copy-confirmed {
+  background: #f1fbf6;
+  border-color: #8ac8ad;
+  color: var(--green);
+}
+
+button.copy-feedback-fading {
+  color: transparent;
+}
+
+input,
+select {
+  padding: 0 10px;
+  min-width: 180px;
+}
+
+.statusline {
+  font-size: 12px;
+  color: #d7e0e8;
+  text-align: right;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.dashboard-hud {
+  border-radius: 8px;
+  scroll-margin-top: 12px;
+}
+
+.dashboard-hud:focus-visible {
+  outline: 2px solid #8eb8ee;
+  outline-offset: 4px;
+}
+
+.metric {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 86px;
+  box-shadow: var(--shadow);
+}
+
+.metric-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.metric-button:hover,
+.metric-button:focus-visible {
+  border-color: #9eb0bf;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.14);
+  transform: translateY(-1px);
+}
+
+.metric-button:focus-visible {
+  outline: 2px solid #8eb8ee;
+  outline-offset: 2px;
+}
+
+.metric .label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.metric .value {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.metric.active {
+  border-top: 4px solid var(--green);
+}
+
+.metric.stale {
+  border-top: 4px solid var(--amber);
+}
+
+.metric.done {
+  border-top: 4px solid var(--blue);
+}
+

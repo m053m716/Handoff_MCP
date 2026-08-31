@@ -1,0 +1,495 @@
+/* Dashboard operational panels: tables, statuses, todo controls, and complexity badges. */
+
+section {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+section > .section-head {
+  min-height: 48px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-title {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+}
+
+.filter-control {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.filter-control select {
+  min-width: 190px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.hud-jump {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.hud-jump:hover,
+.hud-jump:focus-visible {
+  border-color: #b8c4cf;
+  background: #ffffff;
+  color: var(--blue);
+}
+
+.hud-jump:focus-visible {
+  outline: 2px solid #8eb8ee;
+  outline-offset: 2px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.bounded-table-wrap {
+  max-height: var(--bounded-table-max-height, clamp(320px, 52vh, 620px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.bounded-table-wrap:focus-visible {
+  outline: 2px solid #8eb8ee;
+  outline-offset: -2px;
+}
+
+.bounded-table-wrap table {
+  min-width: 760px;
+}
+
+.bounded-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+.bounded-table-wrap tbody tr {
+  scroll-margin-top: 38px;
+}
+
+.open-todos-wrap {
+  --bounded-table-max-height: clamp(380px, 58vh, 720px);
+}
+
+.open-todos-wrap table {
+  min-width: 940px;
+}
+
+.todo-lanes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface-1);
+}
+
+.todo-lane {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-1);
+}
+
+.todo-lane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.todo-lane-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.todo-lane-scroll {
+  max-height: clamp(320px, 52vh, 620px);
+  border-radius: 0;
+}
+
+.todo-lane-scroll table {
+  min-width: 0;
+  width: 100%;
+}
+
+.todo-lane-scroll .col-priority {
+  width: 62px;
+}
+
+.todo-lane-scroll .col-task {
+  width: 180px;
+}
+
+.todo-lane-scroll .col-agent-sm {
+  width: 118px;
+}
+
+.todo-lane-scroll .todo-title-col {
+  width: auto;
+}
+
+.todo-lane-scroll td {
+  padding: 9px 8px;
+}
+
+.todo-lane-scroll .scope-dropdown,
+.todo-lane-scroll .scope-select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.todo-lane-scroll .scope-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.todo-lane-empty {
+  padding: 18px 12px;
+  font-size: 12px;
+}
+
+.compact-table-wrap {
+  --bounded-table-max-height: clamp(260px, 42vh, 440px);
+}
+
+/* The orchestration queue rows are tall (each carries a prompt-snapshot
+   details block), so the compact 42vh cap only showed a handful before the
+   rest scrolled out of view. Give the queue a taller region so more rows are
+   visible at once; overflow still scrolls for very deep queues. */
+.queue-table-wrap {
+  --bounded-table-max-height: clamp(360px, 66vh, 820px);
+}
+
+/* Fluid inline picker shown from the radial "Queue" action when more than one
+   orchestrator is active. Anchored at the click via inline top/left. */
+.queue-assignment-picker {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  max-width: 360px;
+  padding: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.queue-assignment-picker .queue-picker-head {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.queue-assignment-picker button {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+
+.queue-assignment-picker button:hover,
+.queue-assignment-picker button:focus-visible {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  background: #fbfcfd;
+  letter-spacing: 0;
+}
+
+td {
+  overflow-wrap: anywhere;
+}
+
+tr:last-child td {
+  border-bottom: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.empty {
+  padding: 22px 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.priority-control,
+.scope-control {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.priority-chip,
+.scope-chip {
+  min-height: 28px;
+  padding: 2px 9px;
+  box-shadow: none;
+}
+
+.priority-chip:hover,
+.priority-chip:focus-visible,
+.scope-chip:hover,
+.scope-chip:focus-visible {
+  border-color: #9eb0bf;
+  background: #eef6ff;
+}
+
+.priority-dropdown,
+.scope-dropdown {
+  display: grid;
+  gap: 5px;
+  min-width: 78px;
+}
+
+.priority-select {
+  min-width: 78px;
+  width: 78px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.priority-error {
+  width: 160px;
+}
+
+.scope-dropdown,
+.scope-select {
+  min-width: 168px;
+}
+
+.scope-error {
+  width: 220px;
+}
+
+.badge.in_progress {
+  color: var(--green);
+  border-color: #9bd5bd;
+  background: #effaf5;
+}
+
+.badge.paused,
+.badge.blocked {
+  color: var(--amber);
+  border-color: #ecc47b;
+  background: #fff7e8;
+}
+
+.badge.done {
+  color: var(--blue);
+  border-color: #adc8ef;
+  background: #eff6ff;
+}
+
+.badge.abandoned,
+.badge.flushed {
+  color: var(--red);
+  border-color: #efb3ad;
+  background: #fff5f5;
+}
+
+.complexity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.complexity-badge.predicted {
+  border: 1px solid #d4a574;
+  background: #fef4e5;
+  color: #6d4a2e;
+}
+
+.complexity-badge.actual {
+  border: 1px solid #9bd5bd;
+  background: #effaf5;
+  color: #11845b;
+}
+
+.complexity-badge .label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.queue-add-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.4fr) minmax(260px, 1.4fr) auto;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.orchestration-head-actions,
+.orchestrator-assignment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.orchestrator-assignment {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #f8fafc;
+}
+
+.orchestrator-assignment strong {
+  color: var(--text);
+}
+
+.queue-table {
+  min-width: 1080px;
+}
+
+.queue-prompt {
+  margin-top: 7px;
+}
+
+.queue-prompt summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-weight: 650;
+}
+
+.queue-prompt pre {
+  max-height: 260px;
+  margin: 8px 0 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
+.badge.queued,
+.badge.pending,
+.badge.not_required {
+  color: var(--muted);
+}
+
+.badge.dispatched,
+.badge.claimed,
+.badge.delegated,
+.badge.committed {
+  color: var(--blue);
+  border-color: #adc8ef;
+  background: #eff6ff;
+}
+
+.badge.completed,
+.badge.success {
+  color: var(--green);
+  border-color: #9bd5bd;
+  background: #effaf5;
+}
+
+.badge.failed,
+.badge.cancelled,
+.badge.stale {
+  color: var(--red);
+  border-color: #efb3ad;
+  background: #fff5f5;
+}
+

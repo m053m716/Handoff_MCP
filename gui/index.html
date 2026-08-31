@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Dashboard</title>
+  <link rel="stylesheet" href="mcp-gui/styles.css">
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1 id="dashboardTitle">MCP Dashboard</h1>
+        <div class="subtitle" id="repoRoot">Loading local repository state</div>
+      </div>
+      <div>
+        <div class="toolbar">
+          <button id="refreshBtn" class="primary" type="button">Refresh</button>
+          <select id="refreshRate" aria-label="Refresh interval">
+            <option value="5000">5 s</option>
+            <option value="15000" selected>15 s</option>
+            <option value="30000">30 s</option>
+            <option value="60000">60 s</option>
+            <option value="0">Manual</option>
+          </select>
+          <select id="cacheMode" aria-label="Read cache mode" title="Client read cache: reduces repeated requests to the MCP server. Refresh forces a fresh load.">
+            <option value="off">Cache: Off</option>
+            <option value="memory" selected>Cache: Memory</option>
+            <option value="localStorage">Cache: Stored</option>
+          </select>
+        </div>
+        <div class="statusline" id="updatedAt">Not updated</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="dashboardHud" class="dashboard-hud" tabindex="-1" role="region" aria-label="Dashboard HUD">
+      <div class="metrics" id="metrics"></div>
+    </div>
+    <div id="dashboardPanels" aria-label="Dashboard panels"></div>
+  </main>
+
+  <script type="module" src="mcp-gui/dashboard.js"></script>
+</body>
+</html>

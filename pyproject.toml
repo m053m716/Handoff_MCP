@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "handoff-mcp"
+version = "0.1.0"
+description = "Minimal, project-scoped TODO / Handoff MCP server (stdio) with a loopback viewer."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Max Murphy", email = "max.murphy11@gmail.com" }]
+keywords = ["mcp", "todo", "handoff", "agents", "context"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+# No runtime dependencies: standard library only (sqlite3, http.server, json).
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+handoff-mcp = "handoff_mcp.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/"
+
+[tool.hatch.build.targets.wheel]
+packages = ["handoff_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

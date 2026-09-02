@@ -25,10 +25,34 @@ def _cmd_serve(_args: argparse.Namespace) -> int:
     return 0
 
 
+#: Default viewer port, shared by the CLI and the generated VS Code task.
+DEFAULT_GUI_PORT = 8765
+
+#: Range for per-repo derived viewer ports (avoids the low registered range).
+_DERIVED_PORT_BASE = 8765
+_DERIVED_PORT_SPAN = 1000
+
+
+def _derived_port(project_key: str) -> int:
+    """A stable viewer port for a repo, derived from its project key.
+
+    Distinct repos get distinct ports (within a 1000-port window above the
+    default), so each repo's committed VS Code task binds its own port and two
+    viewers can be open at once without shadowing each other.
+    """
+
+    offset = int(project_key[:8], 16) % _DERIVED_PORT_SPAN if project_key else 0
+    return _DERIVED_PORT_BASE + offset
+
+
 def _cmd_gui(args: argparse.Namespace) -> int:
     from .gui import run_gui
 
-    run_gui(host=args.host, port=args.port, open_target=args.open)
+    # A None port means the flag was not supplied, so a busy default port may
+    # advance to the next free one; an explicit --port stays put or fails.
+    port_explicit = args.port is not None
+    port = args.port if port_explicit else DEFAULT_GUI_PORT
+    run_gui(host=args.host, port=port, open_target=args.open, port_explicit=port_explicit)
     return 0
 
 
@@ -103,7 +127,8 @@ def _cmd_init(args: argparse.Namespace) -> int:
     print("that reads project-local .mcp.json. Commit the file to share the setup.")
 
     if args.vscode:
-        _write_vscode_task(project.root, port=args.port, force=args.force)
+        port = args.port if args.port is not None else _derived_port(project.key)
+        _write_vscode_task(project.root, port=port, force=args.force)
     return 0
 
 
@@ -193,7 +218,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_gui = sub.add_parser("gui", help="Open the loopback viewer.")
     p_gui.add_argument("--host", default="127.0.0.1", help="Loopback host (default 127.0.0.1).")
-    p_gui.add_argument("--port", type=int, default=8765, help="Port (default 8765).")
+    p_gui.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help=(
+            f"Port (default {DEFAULT_GUI_PORT}). Without --port, a busy default "
+            "advances to the next free port so viewers for different repos do not "
+            "collide; an explicit --port that is busy fails instead of moving."
+        ),
+    )
     p_gui.add_argument(
         "--open",
         choices=["auto", "vscode", "browser", "none"],
@@ -221,7 +255,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also write a .vscode/tasks.json task that opens the viewer in an editor tab.",
     )
     p_init.add_argument(
-        "--port", type=int, default=8765, help="Viewer port used by the VS Code task (default 8765)."
+        "--port",
+        type=int,
+        default=None,
+        help=(
+            "Viewer port for the VS Code task. Default: a stable port derived "
+            "from this repo's project key, so each repo's task gets a distinct "
+            "port and two open viewers do not collide."
+        ),
     )
     p_init.set_defaults(func=_cmd_init)
 

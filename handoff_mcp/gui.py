@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -203,6 +204,24 @@ load();
 _ASSET_DIR = Path(__file__).with_name("assets")
 
 
+class _ViewerServer(ThreadingHTTPServer):
+    """Loopback viewer server that refuses to shadow another viewer.
+
+    ``ThreadingHTTPServer`` defaults ``allow_reuse_address`` to ``True``, which
+    maps to ``SO_REUSEADDR``. On Windows that flag lets a *second* socket bind a
+    port another process is already listening on, instead of failing — so a
+    second ``handoff-mcp gui`` on the same port would silently coexist with the
+    first, and the OS would route requests to whichever socket it pleased. That
+    is exactly how one repo's viewer ends up showing another repo's items.
+
+    Setting it ``False`` makes a bind to an occupied port raise ``OSError``
+    (WinError 10048), which the caller turns into a clean port-fallback or a
+    clear error instead of a wrong-project page.
+    """
+
+    allow_reuse_address = False
+
+
 class _Handler(BaseHTTPRequestHandler):
     project: Project
     store: Store
@@ -275,10 +294,49 @@ def _running_in_vscode() -> bool:
     return bool(os.environ.get("VSCODE_PID") or os.environ.get("TERM_PROGRAM") == "vscode")
 
 
+#: How many consecutive ports to try past a busy default before giving up.
+_PORT_SCAN_RANGE = 20
+
+
+def _bind_server(host: str, port: int, handler: type, *, port_explicit: bool) -> _ViewerServer:
+    """Bind the viewer, scanning forward from ``port`` when it is not explicit.
+
+    A second ``handoff-mcp gui`` on an already-listening port must never quietly
+    coexist with the first (that is the wrong-project bug). So:
+
+    * an explicit ``--port`` that is busy raises ``PortInUse`` with guidance;
+    * the default port, when busy, advances to the next free port so one viewer
+      per repository works without hand-assigning ports.
+    """
+
+    last_error: OSError | None = None
+    scan = 1 if port_explicit else _PORT_SCAN_RANGE
+    for candidate in range(port, port + scan):
+        try:
+            return _ViewerServer((host, candidate), handler)
+        except OSError as exc:  # port in use (WinError 10048 / EADDRINUSE)
+            last_error = exc
+            continue
+    raise PortInUse(host, port, port_explicit, last_error)
+
+
+class PortInUse(RuntimeError):
+    """Raised when the viewer cannot bind a loopback port."""
+
+    def __init__(self, host: str, port: int, explicit: bool, cause: OSError | None) -> None:
+        self.host = host
+        self.port = port
+        self.explicit = explicit
+        self.cause = cause
+        super().__init__(str(cause) if cause else "could not bind a viewer port")
+
+
 def run_gui(
     host: str = "127.0.0.1",
     port: int = 8765,
     open_target: str = "auto",
+    *,
+    port_explicit: bool = False,
 ) -> None:
     """Serve the loopback-only viewer for the current project.
 
@@ -290,6 +348,12 @@ def run_gui(
     * ``browser`` — force the default external browser.
     * ``none``    — serve only; open nothing.
 
+    ``port_explicit`` records whether the caller passed ``--port`` on purpose.
+    When it did and the port is busy, we fail loudly rather than moving, so the
+    port keeps matching any VS Code task URL wired to it; otherwise a busy
+    default port advances to the next free one so one viewer per repository can
+    run at once without colliding.
+
     Opening the viewer as a *VS Code editor tab* (Simple Browser) cannot be
     triggered from an external process — the ``code`` CLI has no command for it.
     Use the ``Handoff: Open Viewer`` task written by ``handoff-mcp init
@@ -300,11 +364,19 @@ def run_gui(
     store = Store(project.key)
 
     handler = type("BoundHandler", (_Handler,), {"project": project, "store": store})
-    httpd = ThreadingHTTPServer((host, port), handler)
-    url = f"http://{host}:{httpd.server_address[1]}/"
+    try:
+        httpd = _bind_server(host, port, handler, port_explicit=port_explicit)
+    except PortInUse as exc:
+        _report_port_in_use(exc)
+        raise SystemExit(1) from exc
+
+    bound_port = httpd.server_address[1]
+    url = f"http://{host}:{bound_port}/"
     print(f"Handoff viewer: {url}")
     print(f"  project: {project.label} ({project.key})")
     print(f"  root:    {project.root}")
+    if bound_port != port and not port_explicit:
+        print(f"  note:    default port {port} was busy; using {bound_port} instead.")
     print("  Ctrl+C to stop.")
 
     _open_viewer(url, open_target)
@@ -315,6 +387,24 @@ def run_gui(
         print("\nStopping viewer.")
     finally:
         httpd.server_close()
+
+
+def _report_port_in_use(exc: PortInUse) -> None:
+    if exc.explicit:
+        print(
+            f"Port {exc.port} on {exc.host} is already in use "
+            f"(another handoff-mcp gui may be running there).\n"
+            f"  A viewer bound to that port would show a different project's items.\n"
+            f"  Start this one on another port, e.g.  handoff-mcp gui --port {exc.port + 1}",
+            file=sys.stderr,
+        )
+    else:
+        last = exc.port + _PORT_SCAN_RANGE - 1
+        print(
+            f"No free port found in {exc.port}-{last} on {exc.host}.\n"
+            f"  Close some running viewers, or pick a port explicitly with --port.",
+            file=sys.stderr,
+        )
 
 
 def _open_viewer(url: str, open_target: str) -> None:

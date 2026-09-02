@@ -183,6 +183,56 @@ def test_no_mcp_config_falls_back_to_directory(tmp_path, clean_scope_env):
     assert resolved.key == _key_for(repo.resolve())
 
 
+def test_viewer_server_does_not_reuse_address():
+    # On Windows SO_REUSEADDR lets a second socket shadow a listening one; the
+    # viewer must keep this off so a second gui fails/scans instead of showing
+    # another repo's items on the same port.
+    from handoff_mcp.gui import _ViewerServer
+
+    assert _ViewerServer.allow_reuse_address is False
+
+
+def test_bind_scans_forward_when_default_port_busy():
+    from handoff_mcp.gui import _Handler, _bind_server
+
+    handler = type("H", (_Handler,), {"project": None, "store": None})
+    first = _bind_server("127.0.0.1", 0, handler, port_explicit=False)
+    busy = first.server_address[1]
+    try:
+        # A non-explicit bind starting at the busy port must land on a different,
+        # free port rather than shadowing the first server.
+        second = _bind_server("127.0.0.1", busy, handler, port_explicit=False)
+        try:
+            assert second.server_address[1] != busy
+        finally:
+            second.server_close()
+    finally:
+        first.server_close()
+
+
+def test_explicit_busy_port_raises_port_in_use():
+    from handoff_mcp.gui import _Handler, PortInUse, _bind_server
+
+    handler = type("H", (_Handler,), {"project": None, "store": None})
+    first = _bind_server("127.0.0.1", 0, handler, port_explicit=True)
+    busy = first.server_address[1]
+    try:
+        with pytest.raises(PortInUse) as excinfo:
+            _bind_server("127.0.0.1", busy, handler, port_explicit=True)
+        assert excinfo.value.explicit is True
+        assert excinfo.value.port == busy
+    finally:
+        first.server_close()
+
+
+def test_derived_port_is_stable_and_distinct():
+    from handoff_mcp.__main__ import _derived_port
+
+    assert _derived_port("95906624489c32ff") == _derived_port("95906624489c32ff")
+    assert _derived_port("95906624489c32ff") != _derived_port("00000000ffffffff")
+    assert 8765 <= _derived_port("95906624489c32ff") < 8765 + 1000
+
+
 def test_favicon_assets_are_valid_and_linked():
     asset_dir = Path(__file__).parents[1] / "handoff_mcp" / "assets"
     png = (asset_dir / "favicon.png").read_bytes()

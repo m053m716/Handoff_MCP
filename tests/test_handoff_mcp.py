@@ -9,7 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from handoff_mcp.project import resolve_project
+from handoff_mcp.project import (
+    PROJECT_KEY_ENV_VAR,
+    PROJECT_ROOT_ENV_VAR,
+    _key_for,
+    resolve_project,
+)
 from handoff_mcp.gui import PAGE
 from handoff_mcp.server import HandoffServer
 from handoff_mcp.storage import Store
@@ -117,6 +122,65 @@ def test_tool_error_is_reported_not_raised(db):
         }
     )
     assert call["result"]["isError"] is True
+
+
+@pytest.fixture()
+def clean_scope_env(monkeypatch):
+    """Ensure no ambient scope env leaks into project resolution under test."""
+    monkeypatch.delenv(PROJECT_ROOT_ENV_VAR, raising=False)
+    monkeypatch.delenv(PROJECT_KEY_ENV_VAR, raising=False)
+
+
+def _write_mcp_config(directory: Path, env: dict) -> None:
+    (directory / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"handoff": {"command": "handoff-mcp", "env": env}}}),
+        encoding="utf-8",
+    )
+
+
+def test_gui_scope_reads_project_root_from_mcp_config(tmp_path, clean_scope_env):
+    # A repo (non-git tmp dir) whose committed .mcp.json pins its own root.
+    repo = tmp_path / "my_repo"
+    repo.mkdir()
+    _write_mcp_config(repo, {PROJECT_ROOT_ENV_VAR: str(repo)})
+
+    # Resolving from the repo root, and from a nested subdirectory, must both
+    # scope to the repo the .mcp.json names via the walked-up config search.
+    nested = repo / "src" / "pkg"
+    nested.mkdir(parents=True)
+
+    for start in (repo, nested):
+        resolved = resolve_project(start)
+        assert resolved.key == _key_for(repo.resolve())
+        assert resolved.label == "my_repo"
+
+
+def test_gui_scope_reads_project_key_from_mcp_config(tmp_path, clean_scope_env):
+    repo = tmp_path / "shared_repo"
+    repo.mkdir()
+    _write_mcp_config(repo, {PROJECT_KEY_ENV_VAR: "sharedkey0000000"})
+
+    resolved = resolve_project(repo)
+    assert resolved.key == "sharedkey0000000"
+
+
+def test_ambient_env_overrides_mcp_config(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_mcp_config(repo, {PROJECT_KEY_ENV_VAR: "fromconfig000000"})
+
+    monkeypatch.setenv(PROJECT_KEY_ENV_VAR, "fromenv000000000")
+    monkeypatch.delenv(PROJECT_ROOT_ENV_VAR, raising=False)
+
+    resolved = resolve_project(repo)
+    assert resolved.key == "fromenv000000000"
+
+
+def test_no_mcp_config_falls_back_to_directory(tmp_path, clean_scope_env):
+    repo = tmp_path / "plain"
+    repo.mkdir()
+    resolved = resolve_project(repo)
+    assert resolved.key == _key_for(repo.resolve())
 
 
 def test_favicon_assets_are_valid_and_linked():

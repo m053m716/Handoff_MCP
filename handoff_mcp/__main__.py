@@ -122,6 +122,10 @@ def _write_vscode_task(root: Path, *, port: int, force: bool) -> None:
         "command": "handoff-mcp",
         "args": ["gui", "--open", "none", "--port", str(port)],
         "isBackground": True,
+        # Pin this repo's scope so the viewer shows only this project's items,
+        # regardless of the directory the task launches from. This mirrors the
+        # HANDOFF_MCP_PROJECT_ROOT that .mcp.json sets for the serve process.
+        "options": {"env": {"HANDOFF_MCP_PROJECT_ROOT": str(root)}},
         "problemMatcher": [
             {
                 "pattern": [{"regexp": ".", "file": 1, "location": 2, "message": 3}],

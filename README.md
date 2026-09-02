@@ -163,7 +163,15 @@ handoff-mcp gui --open none       # serve only; open nothing
 handoff-mcp gui --port 9000       # different port
 ```
 
-The viewer binds `127.0.0.1` only. It lists the open handoffs and todos for the project of the directory you launched it from, with a **Copy** button per item (paste-ready text for an agent) and buttons to mark items done / resolved. There is no auth and no remote access by design — it is a local convenience window, not a service.
+The viewer binds `127.0.0.1` only, with a **Copy** button per item (paste-ready text for an agent) and buttons to mark items done / resolved. There is no auth and no remote access by design — it is a local convenience window, not a service.
+
+**Scope.** The viewer shows one project's items. It resolves that project the same way the server does, and in the same order:
+
+1. `HANDOFF_MCP_PROJECT_ROOT` / `HANDOFF_MCP_PROJECT_KEY` in the process environment, if set.
+2. Otherwise, those same keys read from the `handoff` server's `env` block in the repo's `.mcp.json` (what `handoff-mcp init` writes). Because the MCP client applies that `env` only to the `serve` process, a hand-launched `handoff-mcp gui` would not otherwise inherit it — reading it back from `.mcp.json` makes the viewer scope to the repo you configured rather than to whatever Git root the launch directory happens to sit in. The file is found at the Git top-level or by walking up from the launch directory.
+3. Otherwise, Git detection of the launch directory.
+
+So once a repo's `.mcp.json` pins its scope, `handoff-mcp gui` shows only that repo's handoffs and todos regardless of where you launch it from.
 
 ### Opening it inside VS Code (editor tab, not a separate window)
 
@@ -202,8 +210,10 @@ See [docs/TOOL_GUIDE.md](docs/TOOL_GUIDE.md) for detailed usage, argument refere
 
 Every record carries a `project_key`. Resolution, per working directory:
 
-1. **Git top-level** (`git rev-parse --show-toplevel`) if inside a work tree — stable across branches and subdirectories.
-2. Otherwise the resolved working-directory path.
+1. `HANDOFF_MCP_PROJECT_ROOT` / `HANDOFF_MCP_PROJECT_KEY` from the process environment (what the client applies to `serve` from `.mcp.json`).
+2. The same keys read back from the repo's `.mcp.json` `handoff` server `env`, when absent from the environment — this is what lets a hand-launched `handoff-mcp gui` scope to the configured repo rather than the launch directory.
+3. **Git top-level** (`git rev-parse --show-toplevel`) if inside a work tree — stable across branches and subdirectories.
+4. Otherwise the resolved working-directory path.
 
 The root path is case-folded (so `C:\Repo` and `c:\repo` match) and hashed to a short opaque key.
 

@@ -165,6 +165,13 @@ handoff-mcp gui --port 9000       # different port
 
 The viewer binds `127.0.0.1` only, with a **Copy** button per item (paste-ready text for an agent) and buttons to mark items done / resolved. There is no auth and no remote access by design — it is a local convenience window, not a service.
 
+**Running one viewer per repo.** Each `handoff-mcp gui` binds its own port and shows one project. Ports never overlap:
+
+- Without `--port`, a busy default port (8765) automatically advances to the next free port, and the chosen port is printed. So you can open a viewer in several repos at once and each gets a distinct port — no collision, no wrong-project page.
+- With an explicit `--port`, a busy port fails with a clear message instead of moving (so the port keeps matching any URL wired to it, e.g. a VS Code task). Pick another port and retry.
+
+The viewer never shares a port with an already-running viewer: `SO_REUSEADDR` shadow-binding (which on Windows would let a second viewer silently attach to a port another repo's viewer already holds, then serve that other repo's items) is disabled.
+
 **Scope.** The viewer shows one project's items. It resolves that project the same way the server does, and in the same order:
 
 1. `HANDOFF_MCP_PROJECT_ROOT` / `HANDOFF_MCP_PROJECT_KEY` in the process environment, if set.
@@ -178,7 +185,7 @@ So once a repo's `.mcp.json` pins its scope, `handoff-mcp gui` shows only that r
 VS Code shows local web pages in an editor tab via its built-in **Simple Browser**. An external process cannot trigger that (the `code` CLI has no command for it), so there are two supported ways to get a tab:
 
 1. **Ctrl+Click the URL.** Run `handoff-mcp gui` in the VS Code integrated terminal; when inside VS Code the command prints a Ctrl-clickable URL instead of launching an external browser, and VS Code opens it as a Simple Browser tab.
-2. **Run the generated task.** `handoff-mcp init --vscode` writes `.vscode/tasks.json` with a **Handoff: Open Viewer** task. From the Command Palette choose *Tasks: Run Task → Handoff: Open Viewer*; it starts the loopback server and opens the viewer as an editor tab in one step.
+2. **Run the generated task.** `handoff-mcp init --vscode` writes `.vscode/tasks.json` with a **Handoff: Open Viewer** task. From the Command Palette choose *Tasks: Run Task → Handoff: Open Viewer*; it starts the loopback server and opens the viewer as an editor tab in one step. The task pins this repo's `HANDOFF_MCP_PROJECT_ROOT` and uses a port derived from the repo's project key (override with `--port`), so two repos' tasks get distinct ports and never show each other's items. Commit `.vscode/tasks.json` to share the setup.
 
 ## CLI
 

@@ -29,8 +29,26 @@ You never run `handoff-mcp serve` by hand. The MCP **client** (your agent's harn
 ```bash
 cd /path/to/your/repo
 handoff-mcp init            # writes ./.mcp.json (scoped to this repo)
-handoff-mcp init --vscode   # also writes a .vscode task to open the viewer in an editor tab
+handoff-mcp init --vscode   # also writes .codex/config.toml and a .vscode viewer task
 ```
+
+`--vscode` additionally:
+
+- writes the per-repo **Codex** config (`.codex/config.toml`, marked `trust_level = "trusted"` and scoped to this repo);
+- writes a `.vscode/tasks.json` task that opens the viewer in an editor tab;
+- adds a short **usage-guidance** block for agents to `AGENTS.md` (created if absent) and to `README.md` if one exists — how to call `handoff_list` / `handoff_add` / `todo_add` / `context_compact` in a session.
+
+All of these are safe to commit. Re-running upserts in place — the `handoff` config entry is replaced (not duplicated), unrelated servers/tables are preserved, and the guidance block (delimited by `<!-- handoff-mcp:begin -->` … `<!-- handoff-mcp:end -->` markers) is replaced without disturbing surrounding content.
+
+To register the server **globally** for both clients at once (instead of per-repo), install the dev extra and run the bundled script:
+
+```bash
+pip install -e ".[dev]"
+handoff-mcp-install                       # upserts into ~/.claude.json and ~/.codex/config.toml
+handoff-mcp-install --project-root /repo  # also pin HANDOFF_MCP_PROJECT_ROOT in both
+```
+
+The global entries define the server everywhere; without a pinned root, scope falls back to Git detection or a project-local config. Like `init`, it merges — an existing `handoff` entry is upserted and other servers/tables are left untouched.
 
 The generated `.mcp.json`:
 
@@ -195,6 +213,8 @@ handoff-mcp serve     # run the stdio MCP server (normally launched by the clien
 handoff-mcp gui       # open the loopback viewer
 handoff-mcp list      # print open handoffs/todos for this project to the terminal
 handoff-mcp whoami    # show the resolved project_key / root / database path
+
+handoff-mcp-install   # upsert the server into the global ~/.claude.json and ~/.codex/config.toml
 ```
 
 ## Tools
@@ -244,3 +264,42 @@ pytest
 ## License
 
 MIT.
+
+<!-- handoff-mcp:begin (managed by `handoff-mcp init --vscode`) -->
+## Handoff MCP — session memory for agents
+
+This repo has the `handoff` MCP server configured (see `.mcp.json` /
+`.codex/config.toml`). It is a durable, project-scoped place to leave
+breadcrumbs between sessions. Use it instead of re-deriving context.
+
+**At the start of a session**, call `handoff_list` to reload where prior work
+stopped and what to do next, and `todo_list` for outstanding next steps. This is
+cheaper and more reliable than re-reading the whole transcript.
+
+**While working**, when you find something that must be done but is not the
+current focus, call `todo_add` rather than holding it in the conversation.
+
+**When context gets heavy** (stale greps, large logs, finished sub-tasks pile
+up), call `context_report`, then `context_compact` — it returns a
+summarise-then-handoff procedure and can persist the summary as a handoff in one
+call.
+
+**At the end of a work chunk**, call `handoff_add` with a summary, next steps,
+and the few key facts (file paths, decisions, gotchas) the next worker needs. A
+fresh session can then resume from `handoff_list` alone.
+
+**Close the loop** with `todo_update` (done/dropped) and `handoff_resolve` so
+the open lists stay a true worklist.
+
+| Tool | Use it to |
+| --- | --- |
+| `handoff_list` | Reload breadcrumbs at session start. |
+| `handoff_add` | Record where you stopped and what is next. |
+| `handoff_resolve` | Mark a handoff done. |
+| `todo_add` / `todo_list` / `todo_update` | Track next-step TODOs. |
+| `project_status` | Counts of open todos and handoffs. |
+| `context_report` / `context_compact` | Notice and shrink a bloated context window. |
+
+Every tool is scoped to this project only; there is no way to reach another
+project's data. Full reference: `docs/TOOL_GUIDE.md`.
+<!-- handoff-mcp:end -->

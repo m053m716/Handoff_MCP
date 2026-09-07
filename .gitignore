@@ -20,3 +20,8 @@ env/
 *.db
 *.db-wal
 *.db-shm
+
+.mcp.json
+.codex
+.claude
+.vscode

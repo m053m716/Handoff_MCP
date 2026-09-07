@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .config import render_json_config, write_agent_guidance, write_codex_config
 from .project import resolve_project
 from .storage import Store, default_db_path
 
@@ -87,49 +88,108 @@ def _cmd_init(args: argparse.Namespace) -> int:
     Placing the resolved repo root in `HANDOFF_MCP_PROJECT_ROOT` makes the
     project key correct regardless of the working directory the MCP client
     happens to launch the server from. The file is safe to commit.
+
+    With `--vscode`, additionally writes the per-repo Codex config
+    (`.codex/config.toml`) and a `.vscode/tasks.json` viewer task.
     """
 
     project = resolve_project(args.path)
     config_path = project.root / ".mcp.json"
 
-    entry = {
-        "command": "handoff-mcp",
-        "args": ["serve"],
-        "env": {"HANDOFF_MCP_PROJECT_ROOT": str(project.root)},
-    }
-
     existing: dict = {}
     if config_path.exists():
         try:
-            existing = json.loads(config_path.read_text(encoding="utf-8"))
+            raw = config_path.read_text(encoding="utf-8")
+            existing = json.loads(raw) if raw.strip() else {}
         except (ValueError, OSError):
             print(f"Refusing to overwrite unreadable {config_path}", file=sys.stderr)
             return 1
+    if not isinstance(existing, dict):
+        print(f"{config_path} is not a JSON object; not modifying.", file=sys.stderr)
+        return 1
 
-    servers = existing.setdefault("mcpServers", {})
-    if not isinstance(servers, dict):
+    servers = existing.get("mcpServers")
+    if servers is not None and not isinstance(servers, dict):
         print(f"{config_path} has a non-object 'mcpServers'; not modifying.", file=sys.stderr)
         return 1
-    if "handoff" in servers and not args.force:
+    if isinstance(servers, dict) and "handoff" in servers and not args.force:
         print(
             f"'handoff' is already registered in {config_path}. "
-            f"Re-run with --force to overwrite.",
+            f"Re-run with --force to upsert it.",
         )
-        return 0
+        if not args.vscode:
+            return 0
+    else:
+        # Upsert the handoff entry, leaving any other servers untouched.
+        config_path.write_text(render_json_config(existing, str(project.root)), encoding="utf-8")
 
-    servers["handoff"] = entry
-    config_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
-
-    print(f"Wrote {config_path}")
-    print(f"  project_key:  {project.key}")
-    print(f"  project_root: {project.root}")
-    print("\nThe 'handoff' MCP server is now scoped to this repo for any client")
-    print("that reads project-local .mcp.json. Commit the file to share the setup.")
+        print(f"Wrote {config_path}")
+        print(f"  project_key:  {project.key}")
+        print(f"  project_root: {project.root}")
+        print("\nThe 'handoff' MCP server is now scoped to this repo for any client")
+        print("that reads project-local .mcp.json. Commit the file to share the setup.")
 
     if args.vscode:
+        _write_codex_repo_config(project.root, force=args.force)
+        _write_agent_guidance(project.root)
         port = args.port if args.port is not None else _derived_port(project.key)
         _write_vscode_task(project.root, port=port, force=args.force)
     return 0
+
+
+def _write_agent_guidance(root: Path) -> None:
+    """Upsert handoff usage guidance into AGENTS.md and (if present) README.md.
+
+    ``AGENTS.md`` is created if missing — its purpose is exactly this guidance.
+    ``README.md`` is only touched when it already exists; we do not manufacture a
+    README for a repo that has none. The block is delimited by markers, so a
+    repeat run replaces it in place rather than appending a duplicate, and any
+    surrounding content is preserved.
+    """
+
+    for name, create_if_missing in (("AGENTS.md", True), ("README.md", False)):
+        path = root / name
+        try:
+            written = write_agent_guidance(path, create_if_missing=create_if_missing)
+        except OSError as exc:
+            print(f"\nCould not update {path}: {exc}", file=sys.stderr)
+            continue
+        if written:
+            print(f"\nUpdated handoff usage guidance in {path}")
+        else:
+            print(f"\nNo {name} found; skipped (create one and re-run to add guidance).")
+
+
+def _write_codex_repo_config(root: Path, *, force: bool) -> None:
+    """Write/upsert the per-repo Codex config (`.codex/config.toml`).
+
+    Marks the server trusted so Codex loads the project config without a
+    separate prompt, and pins this repo's root. Any prior handoff block is
+    replaced in place; other tables are preserved. ``force`` only affects
+    whether we announce an in-place replacement.
+    """
+
+    codex_path = root / ".codex" / "config.toml"
+    replacing = False
+    if codex_path.exists():
+        try:
+            replacing = "[mcp_servers.handoff" in codex_path.read_text(encoding="utf-8")
+        except OSError:
+            replacing = False
+        if replacing and not force:
+            # Upsert is safe (other tables preserved), so proceed but say so.
+            print(f"\nUpdating existing handoff entry in {codex_path}.")
+
+    try:
+        write_codex_config(codex_path, str(root), trust=True)
+    except OSError as exc:
+        print(f"\nCould not write {codex_path}: {exc}", file=sys.stderr)
+        return
+
+    verb = "Updated" if replacing else "Wrote"
+    print(f"\n{verb} {codex_path}")
+    print("  Codex loads this when the project is trusted (trust_level = \"trusted\").")
+    print("  Commit .codex/config.toml to share the setup.")
 
 
 def _write_vscode_task(root: Path, *, port: int, force: bool) -> None:

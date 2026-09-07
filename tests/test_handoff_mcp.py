@@ -233,6 +233,233 @@ def test_derived_port_is_stable_and_distinct():
     assert 8765 <= _derived_port("95906624489c32ff") < 8765 + 1000
 
 
+def _read_toml(path: Path) -> dict:
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python < 3.11
+        pytest.skip("tomllib unavailable; cannot parse TOML for assertion")
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def test_codex_block_round_trips_as_valid_toml():
+    from handoff_mcp.config import codex_server_block
+
+    text = codex_server_block("/abs/repo", trust=True)
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        pytest.skip("tomllib unavailable")
+    data = tomllib.loads(text)
+    handoff = data["mcp_servers"]["handoff"]
+    assert handoff["command"] == "handoff-mcp"
+    assert handoff["args"] == ["serve"]
+    assert handoff["trust_level"] == "trusted"
+    assert handoff["env"]["HANDOFF_MCP_PROJECT_ROOT"] == "/abs/repo"
+
+
+def test_codex_block_omits_env_and_trust_when_not_requested():
+    from handoff_mcp.config import codex_server_block
+
+    text = codex_server_block(None, trust=False)
+    assert "trust_level" not in text
+    assert "env" not in text
+    assert "HANDOFF_MCP_PROJECT_ROOT" not in text
+
+
+def test_codex_merge_preserves_other_tables_and_upserts_handoff():
+    from handoff_mcp.config import merge_codex_config
+
+    existing = (
+        "[mcp_servers.other]\n"
+        'command = "other"\n'
+        "\n"
+        "[mcp_servers.handoff]\n"
+        'command = "stale"\n'
+        "\n"
+        "[mcp_servers.handoff.env]\n"
+        'HANDOFF_MCP_PROJECT_ROOT = "/old"\n'
+    )
+    merged = merge_codex_config(existing, "/new/repo", trust=True)
+
+    # Other server survives, and there is exactly one handoff table (no dup).
+    assert "[mcp_servers.other]" in merged
+    assert merged.count("[mcp_servers.handoff]") == 1
+    assert "/old" not in merged
+    assert "/new/repo" in merged
+
+
+def test_codex_merge_empty_input_yields_only_block():
+    from handoff_mcp.config import merge_codex_config
+
+    merged = merge_codex_config("   \n\n", "/repo", trust=False)
+    assert merged.startswith("[mcp_servers.handoff]")
+
+
+def test_json_merge_upserts_and_preserves_other_servers():
+    from handoff_mcp.config import merge_json_config
+
+    existing = {"mcpServers": {"other": {"command": "x"}, "handoff": {"command": "stale"}}}
+    merged = merge_json_config(existing, "/repo")
+    assert merged["mcpServers"]["other"] == {"command": "x"}
+    assert merged["mcpServers"]["handoff"]["command"] == "handoff-mcp"
+    assert merged["mcpServers"]["handoff"]["env"]["HANDOFF_MCP_PROJECT_ROOT"] == "/repo"
+
+
+def test_json_global_entry_omits_env():
+    from handoff_mcp.config import json_server_entry
+
+    assert "env" not in json_server_entry(None)
+
+
+def test_init_vscode_writes_codex_and_mcp(tmp_path, clean_scope_env, monkeypatch, capsys):
+    from handoff_mcp.__main__ import build_parser
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setenv(PROJECT_ROOT_ENV_VAR, str(repo))
+
+    args = build_parser().parse_args(["init", "--path", str(repo), "--vscode"])
+    assert args.func(args) == 0
+
+    assert (repo / ".mcp.json").exists()
+    codex = repo / ".codex" / "config.toml"
+    assert codex.exists()
+    data = _read_toml(codex)
+    assert data["mcp_servers"]["handoff"]["trust_level"] == "trusted"
+    assert data["mcp_servers"]["handoff"]["env"]["HANDOFF_MCP_PROJECT_ROOT"] == str(repo)
+    assert (repo / ".vscode" / "tasks.json").exists()
+
+
+def test_init_vscode_upserts_existing_codex_without_dup(tmp_path, clean_scope_env, monkeypatch):
+    from handoff_mcp.__main__ import build_parser
+
+    repo = tmp_path / "repo"
+    (repo / ".codex").mkdir(parents=True)
+    (repo / ".codex" / "config.toml").write_text(
+        "[mcp_servers.handoff]\ncommand = \"stale\"\n\n[mcp_servers.handoff.env]\n"
+        "HANDOFF_MCP_PROJECT_ROOT = \"/old\"\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(PROJECT_ROOT_ENV_VAR, str(repo))
+
+    args = build_parser().parse_args(["init", "--path", str(repo), "--vscode", "--force"])
+    assert args.func(args) == 0
+
+    text = (repo / ".codex" / "config.toml").read_text(encoding="utf-8")
+    assert text.count("[mcp_servers.handoff]") == 1
+    assert "/old" not in text
+
+
+def test_guidance_upsert_creates_and_does_not_duplicate():
+    from handoff_mcp.config import GUIDANCE_BEGIN, _upsert_guidance
+
+    once = _upsert_guidance("")
+    assert once.count(GUIDANCE_BEGIN) == 1
+    # Re-applying replaces in place — still exactly one block.
+    twice = _upsert_guidance(once)
+    assert twice.count(GUIDANCE_BEGIN) == 1
+    assert twice == once
+
+
+def test_guidance_upsert_preserves_surrounding_content():
+    from handoff_mcp.config import GUIDANCE_BEGIN, GUIDANCE_END, _upsert_guidance
+
+    original = "# My Repo\n\nSome intro.\n"
+    updated = _upsert_guidance(original)
+    assert updated.startswith("# My Repo\n\nSome intro.")
+    assert GUIDANCE_BEGIN in updated and GUIDANCE_END in updated
+
+    # A second pass with edited guidance replaces only the block, keeping intro
+    # and any trailing content the user added after the block.
+    with_trailer = updated + "\n## After\n\nmore\n"
+    again = _upsert_guidance(with_trailer)
+    assert again.count(GUIDANCE_BEGIN) == 1
+    assert "Some intro." in again
+    assert "## After" in again
+
+
+def test_write_agent_guidance_skips_missing_when_not_creating(tmp_path):
+    from handoff_mcp.config import write_agent_guidance
+
+    readme = tmp_path / "README.md"
+    assert write_agent_guidance(readme, create_if_missing=False) is False
+    assert not readme.exists()
+
+    agents = tmp_path / "AGENTS.md"
+    assert write_agent_guidance(agents, create_if_missing=True) is True
+    assert agents.exists()
+
+
+def test_init_vscode_writes_agent_guidance(tmp_path, clean_scope_env, monkeypatch):
+    from handoff_mcp.__main__ import build_parser
+    from handoff_mcp.config import GUIDANCE_BEGIN
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    # A pre-existing README should be appended to, not clobbered.
+    (repo / "README.md").write_text("# Repo\n\nHello.\n", encoding="utf-8")
+    monkeypatch.setenv(PROJECT_ROOT_ENV_VAR, str(repo))
+
+    args = build_parser().parse_args(["init", "--path", str(repo), "--vscode"])
+    assert args.func(args) == 0
+
+    agents = (repo / "AGENTS.md").read_text(encoding="utf-8")
+    readme = (repo / "README.md").read_text(encoding="utf-8")
+    assert agents.count(GUIDANCE_BEGIN) == 1
+    assert "handoff_list" in agents
+    assert readme.startswith("# Repo\n\nHello.")
+    assert GUIDANCE_BEGIN in readme
+
+    # Idempotent: a second run does not duplicate the block in either file.
+    args2 = build_parser().parse_args(["init", "--path", str(repo), "--vscode", "--force"])
+    assert args2.func(args2) == 0
+    assert (repo / "AGENTS.md").read_text(encoding="utf-8").count(GUIDANCE_BEGIN) == 1
+    assert (repo / "README.md").read_text(encoding="utf-8").count(GUIDANCE_BEGIN) == 1
+
+
+def test_install_global_writes_both_configs(tmp_path):
+    from handoff_mcp.install import install_global
+
+    written = install_global(tmp_path)
+    claude = tmp_path / ".claude.json"
+    codex = tmp_path / ".codex" / "config.toml"
+    assert set(written) == {claude, codex}
+
+    claude_data = json.loads(claude.read_text(encoding="utf-8"))
+    assert claude_data["mcpServers"]["handoff"]["command"] == "handoff-mcp"
+    # Global entry: no pinned root.
+    assert "env" not in claude_data["mcpServers"]["handoff"]
+
+    codex_data = _read_toml(codex)
+    handoff = codex_data["mcp_servers"]["handoff"]
+    assert handoff["command"] == "handoff-mcp"
+    assert "trust_level" not in handoff  # global entry is not per-project trust
+
+
+def test_install_global_upserts_and_preserves_existing(tmp_path):
+    from handoff_mcp.install import install_global
+
+    # Pre-existing unrelated content in both files.
+    (tmp_path / ".claude.json").write_text(
+        json.dumps({"mcpServers": {"other": {"command": "x"}}, "misc": 1}), encoding="utf-8"
+    )
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "config.toml").write_text(
+        "[some_other_section]\nkey = \"v\"\n", encoding="utf-8"
+    )
+
+    install_global(tmp_path, project_root="/pin")
+
+    claude_data = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
+    assert claude_data["misc"] == 1
+    assert claude_data["mcpServers"]["other"] == {"command": "x"}
+    assert claude_data["mcpServers"]["handoff"]["env"]["HANDOFF_MCP_PROJECT_ROOT"] == "/pin"
+
+    codex_text = (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
+    assert "[some_other_section]" in codex_text
+    assert codex_text.count("[mcp_servers.handoff]") == 1
+
+
 def test_favicon_assets_are_valid_and_linked():
     asset_dir = Path(__file__).parents[1] / "handoff_mcp" / "assets"
     png = (asset_dir / "favicon.png").read_bytes()

@@ -24,4 +24,9 @@ env/
 .mcp.json
 .codex
 .claude
+!.claude/
+.claude/*
+!.claude/skills/
+!.claude/skills/handoff-mcp/
+!.claude/skills/handoff-mcp/SKILL.md
 .vscode

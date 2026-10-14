@@ -1,0 +1,17 @@
+interface:
+  display_name: "Handoff MCP"
+  short_description: "Persist project handoffs and next-step TODOs"
+  icon_small: "./assets/handoff-mcp-96.png"
+  icon_large: "./assets/handoff-mcp.png"
+  brand_color: "#55B98A"
+  default_prompt: "Use $handoff-mcp to reload project breadcrumbs and record the next steps."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "handoff"
+      description: "Handoff MCP server for project-scoped TODOs and session handoffs"
+      transport: "stdio"
+
+policy:
+  allow_implicit_invocation: true

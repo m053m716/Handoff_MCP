@@ -4,7 +4,7 @@ A minimal, project-scoped **TODO / Handoff** MCP server. It gives agent sessions
 
 Design goals:
 
-- **Standard library only.** No third-party runtime dependencies. Persistence is a single SQLite file.
+- **Small runtime surface.** The MCP transport uses the official `mcp` FastMCP implementation; persistence is a single SQLite file.
 - **No network / HTTP for the MCP transport.** The server speaks the standard MCP **stdio** protocol (line-delimited JSON-RPC). The only HTTP surface is an optional, loopback-only viewer you launch by hand.
 - **Strict project isolation.** One installation and one database serve many repositories; every record is tagged with a `project_key` derived from the Git repository root. A repository can never see another's handoffs or todos.
 - **Context hygiene built in.** Tools that hand the agent a concrete procedure for noticing and shrinking a bloated context window.
@@ -16,7 +16,7 @@ cd c:\MyRepos\Python\Handoff_MCP
 pip install -e .
 ```
 
-This installs the `handoff-mcp` command. (Requires Python 3.9+.)
+This installs the `handoff-mcp` command. (Requires Python 3.10+.)
 
 ## Setup model — who runs what
 
@@ -232,6 +232,19 @@ handoff-mcp-install   # upsert the server into the global ~/.claude.json and ~/.
 | `context_compact` | Procedure to reduce session context; can persist a handoff. |
 
 See [docs/TOOL_GUIDE.md](docs/TOOL_GUIDE.md) for detailed usage, argument reference, recommended workflow, and the context-reduction guidance.
+
+## Agent skill package and icon
+
+The repository includes the `handoff-mcp` skill in the formats used by OpenAI,
+Muse, and Claude:
+
+- `skills/handoff-mcp/` is the canonical skill and OpenAI metadata package.
+- `.agents/skills/handoff-mcp/SKILL.md` is the Muse-compatible mirror.
+- `.claude/skills/handoff-mcp/SKILL.md` is the Claude Code mirror.
+
+The stdio initialization handshake advertises the packaged 96×96 Handoff icon
+as a PNG data URI. This lets MCP clients display the server icon without
+resolving a local path.
 
 ## Project isolation
 

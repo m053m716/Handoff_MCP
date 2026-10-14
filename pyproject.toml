@@ -1,13 +1,13 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "handoff-mcp"
-version = "0.4.1"
+version = "1.0.0"
 description = "Minimal, project-scoped TODO / Handoff MCP server (stdio) with a loopback viewer."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "Max Murphy", email = "max.murphy11@gmail.com" }]
 keywords = ["mcp", "todo", "handoff", "agents", "context"]
@@ -17,8 +17,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-# No runtime dependencies: standard library only (sqlite3, http.server, json).
-dependencies = []
+dependencies = [
+    "mcp>=1.29.0,<2",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
@@ -30,8 +31,21 @@ handoff-mcp-install = "handoff_mcp.install:main"
 [project.urls]
 Homepage = "https://github.com/m053m716/Handoff_MCP"
 
-[tool.hatch.build.targets.wheel]
-packages = ["handoff_mcp"]
+[tool.setuptools.packages.find]
+include = ["handoff_mcp*"]
+
+[tool.setuptools.package-data]
+handoff_mcp = ["assets/*.png", "assets/*.ico"]
+
+[tool.setuptools.data-files]
+"share/handoff-mcp/skill" = ["skills/handoff-mcp/SKILL.md"]
+"share/handoff-mcp/skill/agents" = ["skills/handoff-mcp/agents/openai.yaml"]
+"share/handoff-mcp/skill/assets" = [
+    "skills/handoff-mcp/assets/handoff-mcp.png",
+    "skills/handoff-mcp/assets/handoff-mcp-96.png",
+]
+"share/handoff-mcp/agent-skills/muse" = [".agents/skills/handoff-mcp/SKILL.md"]
+"share/handoff-mcp/agent-skills/claude" = [".claude/skills/handoff-mcp/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

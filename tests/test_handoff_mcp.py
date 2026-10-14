@@ -470,3 +470,37 @@ def test_favicon_assets_are_valid_and_linked():
     assert struct.unpack("<HHH", ico[:6]) == (0, 1, 7)
     assert 'href="/favicon.png"' in PAGE
     assert 'href="/favicon.ico"' in PAGE
+
+
+def test_fastmcp_advertises_handoff_icon_and_tools():
+    from mcp.server.fastmcp import FastMCP
+
+    from handoff_mcp.server import _mcp_icons, mcp
+
+    assert isinstance(mcp, FastMCP)
+    icons = _mcp_icons()
+    assert len(icons) == 1
+    assert icons[0].mimeType == "image/png"
+    assert icons[0].sizes == ["96x96"]
+    assert icons[0].src.startswith("data:image/png;base64,")
+    assert set(mcp._tool_manager._tools) == {
+        "todo_add",
+        "todo_list",
+        "todo_update",
+        "handoff_add",
+        "handoff_list",
+        "handoff_resolve",
+        "project_status",
+        "context_report",
+        "context_compact",
+    }
+
+
+def test_skill_mirrors_match_canonical():
+    root = Path(__file__).parents[1]
+    canonical = (root / "skills" / "handoff-mcp" / "SKILL.md").read_text(encoding="utf-8")
+    for mirror in (
+        root / ".agents" / "skills" / "handoff-mcp" / "SKILL.md",
+        root / ".claude" / "skills" / "handoff-mcp" / "SKILL.md",
+    ):
+        assert mirror.read_text(encoding="utf-8") == canonical
